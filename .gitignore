@@ -1,4 +1,3 @@
-# Xcode
 .DS_Store
 xcuserdata/
 *.xcscmblueprint
@@ -18,18 +17,13 @@ DerivedData/
 *.ipa
 *.dSYM.zip
 *.dSYM
-
-# Swift Package Manager
 .build/
 .swiftpm/
-
-# Environment variables
 .env
 *.env
 !.env.example
-
-# Python
 __pycache__/
 *.py[cod]
 *.class
 venv/
+# ADD FILES FROM 12/3
