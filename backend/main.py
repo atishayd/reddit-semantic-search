@@ -15,10 +15,6 @@ import aiohttp
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 app = FastAPI()
 
 app.add_middleware(
@@ -69,11 +65,13 @@ app.add_middleware(TimeoutMiddleware)
 
 analyzer = SentimentIntensityAnalyzer()
 
+# ADD OR REMOVE AS NECESSARY FROM THE BANK ON WORD DOC
 REVIEW_KEYWORDS = [
     "review", "impression", "feedback", "opinion", 
     "pros", "cons", "verdict", "recommend", "experience"
 ]
 
+# FROM API
 async def get_reddit():
     try:
         ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -86,22 +84,17 @@ async def get_reddit():
             requestor_kwargs={"session": session}
         )
         await reddit.user.me()  # verify credentials
-        logger.info("Reddit API authenticated.")
         return reddit, session
-    except Exception as e:
-        logger.error(f"Failed to initialize Reddit client: {e}")
-        return None, None
 
 def is_review_comment(body: str) -> bool:
-    """
-    Decide whether this comment body qualifies as 'review-like'.
-    We check for certain keywords + a minimum word count.
-    """
+
+    # decide whether this comment body qualifies as 'review-like'.
+    # we check for certain keywords + a minimum word count.
     text_lower = body.lower()
     has_keyword = any(k in text_lower for k in REVIEW_KEYWORDS)
     word_count = len(body.split())
-    
-    # Example: require at least 20 words if no explicit keyword found
+
+    # STANDARD DO NOT CHANGE!
     if has_keyword or word_count > 30:
         return True
     return False
@@ -115,27 +108,19 @@ async def analyze_reddit_sentiment(query: str, max_posts: int = 10):
     if not query:
         raise APIError("invalidURL", "Search query cannot be empty")
 
-    # Build a more robust query by adding synonyms
     extended_query = f'("{query}" AND ({" OR ".join(REVIEW_KEYWORDS)}))'
 
     reddit, session = await get_reddit()
     if not reddit:
         raise APIError("invalidAPIKey", "Failed to initialize Reddit client")
-    
     try:
         total_compound = 0.0
         total_weight = 0.0
-
         total_posts = 0
         subreddits = set()
-
-        # Instead of storing "top_comments" directly here, let's store 
-        # them by category so we can filter them at the end.
         pos_comments = []
         neg_comments = []
         neu_comments = []
-        
-        # We'll also keep track of each comment's compound score in parallel arrays or a tuple.
         
         logger.info(f"Searching for reviews: {extended_query}")
         subreddit = await reddit.subreddit("all")
@@ -153,7 +138,7 @@ async def analyze_reddit_sentiment(query: str, max_posts: int = 10):
                     total_weight += submission_score
                     total_posts += 1
 
-                    # Extract "review-like" comments
+                    # Extract ONLY review-type comments
                     try:
                         async with asyncio.timeout(5):
                             submission_obj = await reddit.submission(id=submission.id)
@@ -165,21 +150,20 @@ async def analyze_reddit_sentiment(query: str, max_posts: int = 10):
 
                             review_count = 0
                             for comment in top_level_comments:
+                                # JUST FOR DEMO, CHANGE WHEN PUSHED (<20) **********************************
                                 if review_count >= 10:
-                                    # We can store more if you want, 
-                                    # but let's limit to 10 per post to avoid excessive data.
                                     break
                                 if not hasattr(comment, "body"):
                                     continue
                                 
-                                # Only consider "review-like" comments
+                                # WE JUST WANT REVIEW-LIKE COMMENTS
                                 if not is_review_comment(comment.body):
                                     continue
                                 
                                 comment_score = max(1, comment.score)
                                 c_compound = analyzer.polarity_scores(comment.body)["compound"]
 
-                                # Weighted by upvotes + length factor
+                                # Weighted BY UPVOTES + LENGTH
                                 length_factor = max(1.0, math.log2(len(comment.body.split()) + 1))
                                 weight = comment_score * length_factor
 
@@ -187,7 +171,7 @@ async def analyze_reddit_sentiment(query: str, max_posts: int = 10):
                                 total_weight += weight
                                 total_posts += 1
 
-                                # Categorize the comment
+                                # ACTUAL CATEGORIZING
                                 if c_compound >= 0.1:
                                     pos_comments.append((comment.body, c_compound))
                                 elif c_compound <= -0.1:
